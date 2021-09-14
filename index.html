@@ -1,0 +1,168 @@
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta
+        name="viewport"
+        content="initial-scale=1,maximum-scale=1,user-scaleable=no"/>
+        <!-- Base mapbox-->
+        <script src="https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.js"></script>
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/v2.4.1/mapbox-gl.css"/> 
+        <link rel="stylesheet" href="./css/style.css" type="text/css"/>
+
+        <!--Mapbox Geocode-->
+        <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.min.js"></script>
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v4.7.2/mapbox-gl-geocoder.css"/>
+
+        <!--Mapbox Route / Directions-->
+        <!-- <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.js"></script>
+        <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-directions/v4.1.0/mapbox-gl-directions.css"/> -->
+
+    </head>
+    <body>
+        <div>
+            <div id="sidebar">
+                Demografi Bandung 
+                <button id="btn-toggle-demografi" class="button-change" onclick="hideLayer()">Hide</button>
+            </div>
+            <div id="map">
+                <div id="button-map">
+                    <button class="button-change" onclick="changeMap('streets-v11')">Streets</button>
+                    <button class="button-change" onclick="changeMap('satellite-v9')">Satellite</button>
+                </div>
+            </div>
+            <script type="text/javascript">
+                mapboxgl.accessToken = 'pk.eyJ1IjoibW9ocmlkd2FuaGRwIiwiYSI6ImNrdDVlOHF2OTA3bzQybnBkb2t5d2dqajYifQ.meXto06HriWjQZh9A-v4Iw';
+                const map = new mapboxgl.Map({
+                    container : "map",
+                    style : "mapbox://styles/mapbox/streets-v11",
+                    center : [106.774124,-6.121435],
+                    zoom : 9.5
+                });
+
+                map.addControl(
+                    new MapboxGeocoder({
+                        accessToken : mapboxgl.accessToken,
+                        mapboxgl : mapboxgl
+                    })
+                );
+
+
+                map.addControl(new mapboxgl.NavigationControl());
+                map.addControl(new mapboxgl.FullscreenControl());
+                map.addControl(
+                    new mapboxgl.GeolocateControl({
+                        positionOptions : {
+                            enableHighAccuray : true
+                        },
+                        trackUserLocation : false,
+                        showUserHeading : true
+                    })
+                )
+
+                map.once('load', function(){
+                    let geolocate = document.getElementsByClassName("mapboxgl-ctrl-geolocate");
+                    setTimeout(function(){
+                        geolocate[0].click();
+                    },20);
+                    getLayers();
+                });
+
+                // map.addControl(
+                //     new MapboxDirections({
+                //         accessToken : mapboxgl.accessToken
+                //     }),
+                //     "bottom-left"
+                // );
+
+                function changeMap(basemap){
+                    map.setStyle("mapbox://styles/mapbox/" + basemap);
+                }
+
+                async function getLayers(){
+                    let geojson = await getOnlineData();
+                    map.addSource("src-demografi-bandung",{
+                        type : "geojson",
+                        data : geojson
+                    });
+
+                    map.addLayer({
+                        id : "lyr-demografi-bandung",
+                        type : "fill",
+                        source : "src-demografi-bandung",
+                        paint : {
+                            //"fill-color" : "#00FFFF",
+                            //"fill-color" : [
+                            //    "interpolate",
+                            //    ["linear"],
+                            //   ["to-number",["get","POPULASI"]],
+                            //    0, "green",
+                            //    7500, "lightgreen",
+                            //    15000, "yellow",
+                            //    22500, "orange",
+                            //    30000, "red"
+                            //],
+                            "fill-color" : [
+                                "case",
+                                ["==",["get","KECAMATAN"],"BUAHBATU"], "red",
+                                ["==",["get","KECAMATAN"],"PANYILEUKAN"], "yellow",
+                                "green"
+                            ],
+                            "fill-outline-color" : "red",
+                            "fill-opacity" : 0.7
+                        }
+                    });
+
+                    map.on('click',"lyr-demografi-bandung", (e) => {
+                        const props = e.features[0].properties;
+                        let content = '';
+
+                        Object.keys(props).forEach(element => {
+                            content = content + '<tr>'+'<td>' + element +'</td>' +'<td>' + props[element] +'</td>'  +'<tr>';
+                        })
+
+                        new mapboxgl.Popup()
+                        .setLngLat([e.lngLat.lng,e.lngLat.lat])
+                        .setHTML("<div><table><tr><th>Column</th><th>Value</th></tr>"+ content+ "</table></div>")
+                        .addTo(map);
+
+                    })
+                }
+                async function getOnlineData(){
+                    try{
+                        let geojson;
+                        await fetch("https://server.mapid.io/layers_new/get_layer?api_key=f72758a3fa0b4d4e842f4b5bb8c15669&layer_id=613ac8610874930e35e18c51&project_id=6115d707987b1b101e716ea9",
+                        {method : "GET"}
+                    ).then((response) => response.json())
+                    .then((data) => geojson = data.geojson);
+                    console.log(geojson);
+                    return geojson;
+                    }catch(err){
+                        console.log(err);
+                    }
+
+                }
+
+                function hideLayer(){
+                    let val = document.getElementById('btn-toggle-demografi').innerHTML;
+                    let newVal = '';
+
+                    if(val === "Hide"){
+                        newVal = "none";
+                        document.getElementById('btn-toggle-demografi').innerHTML = "Show";
+                    }
+                    else{
+                        newVal = "visible";
+                        document.getElementById('btn-toggle-demografi').innerHTML = "Hide";
+                    }
+
+                    map.setLayoutProperty(
+                        'lyr-demografi-bandung',
+                        'visibility',
+                        newVal
+                    );
+                }
+
+            </script>
+        </div>
+    </body>
+</html>
